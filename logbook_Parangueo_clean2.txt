@@ -1,0 +1,273 @@
+========= ========= ========= ========= ========= ========= ========= =========
+ETAPA 2
+========= ========= ========= ========= ========= ========= ========= =========
+[]$ cd ../05_QIIME/
+
+[]$ ls *.fasta
+mar4_OTUs418t.fasta
+
+--------------------------------------------------------------------------------
+[]$ source activate qiime1
+--------------------------------------------------------------------------------
+(qiime1) [caretta@Fenix 05_QIIME]$ align_seqs.py -i ./mar4_OTUs418t.fasta
+
+(qiime1) []$ wc ./pynast_aligned/*failure*
+0 0 0 ./pynast_aligned/mar4_OTUs418t_failures.fasta
+
+(qiime1) []$ wc ./pynast_aligned/*align*
+    264     396 1016160 ./pynast_aligned/mar4_OTUs418t_aligned.fasta
+>> Son el doble del numero de OTUs...
+
+(qiime1) []$ make_phylogeny.py -i ./pynast_aligned/mar4_OTUs418t_aligned.fasta
+
+(qiime1) [caretta@Fenix 06_Etapa4_QUIIME-Phyloseq]$ ls ./pynast_aligned/*tre
+./pynast_aligned/mar4_OTUs418t_aligned.tre
+--------------------------------------------------------------------------------
+(qiime1) []$ source deactivate
+--------------------------------------------------------------------------------
+
+[]$ cp ./pynast_aligned/mar4_OTUs418t_aligned.tre ../06_Phyloseq/
+
+
+========= ========= ========= ========= ========= ========= ========= =========
+ETAPA 3
+========= ========= ========= ========= ========= ========= ========= =========
+# COMANDOS BASICOS PARA USAR O TEMPO TODO:
+R              # entrar no R
+q()            # sem argumentos; sair do R
+?cmd           # mostra ajuda sobre 'cmd'
+help(cmd)      # faz o mesmo que o anterior
+ls()           # sem argumentos: opcoes: pat="str"
+ls.str()       # opcoes: pat="str"
+<-/->/=        # asignacao de valores/funcoes
+length()       # mostra o tamanho do vetor/matriz (numero de colunas)
+range()        # intervalo de dados (solo para numerico)
+summary()      # estatistica de un vetor
+mode()         # mostra o tipo do vetor/matriz (int,num,str,cmp,log)
+getwd()        # sem argumantos; igual ao 'pwd' do linux
+setwd()        # igual ao 'cd' do linux
+apropos("str") # encontra todas as funcoes que tem o "str"
+rm()           # remove argumento; ex: rm(ls()), que remove toda a lista, aceita
+ 'pat'
+read.table()   # ler um arquivo (ver adiante)
+read.csv()     # ler um arquivo CSV diretamente (opcoes pre-definidas); csv2: co
+m ";"
+read.fwf()     # ler um arquivo sem espacos, colunas com extensao fixa (tipo for
+tran)
+scan()         # outra opcao de ler arquivo
+write.table()  # guardar um objeto do R (memoria ativa) fora dele (memoria perma
+nente)
+
+
+[]$ cd ../06_Phyloseq
+[]$ ls
+mar4_OTUs418t_aligned.tre  mar5_TAX_table418t.txt  mar6_OTU_table418t.txt
+
+
+[]$ R
+R version 3.3.1 (2016-06-21) -- "Bug in Your Hair"
+Copyright (C) 2016 The R Foundation for Statistical Computing
+Platform: x86_64-redhat-linux-gnu (64-bit)
+...
+
+> rm(list=ls())
+> ls()
+character(0)
+> setwd("/home/caretta/PROYECTOS_NGS/NGS/01_MARISOL/PARANGUEO_New2018/06_Phyloseq/")
+
+--------- --------- --------- --------- --------- --------- --------- --------- 
+> TABTAX_418t <- read.table("mar5_TAX_table418t.txt",header=F,sep='\t',fill=T)
+> ls.str(TABTAX_418t)
+V1 :  Factor w/ 132 levels "OTU_1","OTU_10",..: 1 45 56 67 78 89 100 111 122 2 ...
+V2 :  Factor w/ 132 levels "d:Bacteria(1.0000),p:Actinobacteria(0.8200),c:Actinobacteria(0.8200),o:Actinomycetales(0.6200),f:Coriobacteriaceae(0.1400),g:Ar"| __truncated__,..: 66 97 123 59 62 9 132 90 63 55 ...
+V3 :  Factor w/ 1 level "+": 1 1 1 1 1 1 1 1 1 1 ...
+V4 :  Factor w/ 66 levels "d:Bacteria","d:Bacteria,p:Actinobacteria,c:Actinobacteria",..: 30 42 50 25 31 5 1 40 28 21 ...
+
+> ind_418t = seq(from=1,to=length(TABTAX_418t$V1))
+> peg_418t = data.frame(ind_418t,TABTAX_418t$V2)
+> write.table(peg_418t,file="interm_418t.txt",sep=",",quote=F,row.names=F,col.names=F)
+> TAX0_418t <- read.table("interm_418t.txt",header=F,sep=",",fill=T)
+> TAX1_418t = data.frame(TAX0_418t[2:8])
+> TAX_418t <- as.matrix(TAX1_418t)
+> colnames(TAX_418t) <- c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+> rownames(TAX_418t) <- TABTAX_418t$V1
+
+
+> TABOTU_418t <- read.table("mar6_OTU_table418t.txt",header=T,sep='\t',fill=T)
+> ls.str(TABOTU_418t)
+MGGL_R_add :  int [1:132] 806 1975 598 1266 6805 709 299 48 263 8 ...
+MGPL_R_add :  int [1:132] 390 3822 113 0 702 142 6 13 3 0 ...
+OTUId :  Factor w/ 132 levels "OTU_1","OTU_10",..: 78 45 111 56 1 100 35 77 51 19 ...
+
+> OTU_418t = data.matrix(TABOTU_418t[2:3])
+> rownames(OTU_418t) <- TABOTU_418t$OTUId
+
+
+SAM_418t <- read.table("Marisol_Samples.txt",header=T,sep="",row.names=1)
+
+
+library("phyloseq")
+packageVersion("phyloseq")
+[1] '1.16.2'
+
+PHY1 = otu_table(OTU_418t, taxa_are_rows = TRUE)
+PHY2 = tax_table(TAX_418t)
+PHY3 = sample_data(SAM_418t)
+PHY4 <- read_tree("mar4_OTUs418t_aligned.tre", errorIfNULL = FALSE)
+physeq_418t = phyloseq(PHY1, PHY2, PHY3, PHY4)
+
+physeq_418t
+otu_table()   OTU Table:         [ 341 taxa and 3 samples ]
+sample_data() Sample Data:       [ 3 samples by 2 sample variables ]
+tax_table()   Taxonomy Table:    [ 341 taxa by 7 taxonomic ranks ]
+phy_tree()    Phylogenetic Tree: [ 341 tips and 339 internal nodes ]
+
+
+========= ========= ========= ========= ========= ========= ========= =========
+ETAPA 4
+========= ========= ========= ========= ========= ========= ========= =========
+
+> library("phyloseq")
+
+> ls(pat="physeq")
+[1] "physeq_420t2"  "physeq_420t5"  "physeq_Z420t2" "physeq_Z420t5"
+> ntaxa(physeq_420t2)
+[1] 341
+
+
+## Sortar e selecionar somente as 50 OTUs mais abundantes:
+> CT5_50 = prune_taxa(names(sort(taxa_sums(physeq_420t5), TRUE))[1:50],physeq_420t5)
+
+## Graficos de barras:
+plot_bar(CT2_50,fill="Class")
+
+## Arboles:
+> plot_tree (CT2_50, color="Class", shape="sample", size="abundance", base.spacing=0.07, label.tips="taxa_names")
+
+## Guardar graficos:
+> jpeg('CT2_50.jpg')
+
+> pdf('CT2_50.pdf')
+> plot_bar(CT2_50,fill="Class")
+> dev.off()
+
+
+========= ========= ========= ========= ========= ========= ========= =========
+ETAPA 5
+========= ========= ========= ========= ========= ========= ========= =========
+
+>> A primeira coisa eh trocar ':' por '_'
+                              '/' por '_'
+
+
+caretta@Fenix NEW_mar2018]$ xedit Param1_completa &
+
+Dados_VICTOR.txt	# archivo entrada
+Dados_VICTOR.dat	# archivo salida
+4			# numero de muestras (+1 : total)
+
+[caretta@Fenix NEW_mar2018]$ ./Completa_Taxa6.x < Param1_completa
+ Archivo de entrada (lineas: OTUs; columnas: taxa, muestras) --> 
+ Archivo de salida --> 
+ Numero de muestras --> 
+ Numero de OTUs:             1150
+ ---------- Fim do Programa ----------
+
+
+[caretta@Fenix NEW_mar2018]$ xedit Param3_indices &
+
+Dados_VICTOR.dat	# archivo de entrada 
+Dados_VICTOR.ind	# archivo de saida con os indices
+Dados_VICTOR.tax	# archivo de saida com os dados
+4			# numero de amostras (+1)
+0			# taxon a considerar
+
+
+ Archivo de entrada (lineas: OTUs; columnas: taxa, muestras) --> 
+ Archivo de salida (indices) --> 
+ Archivo de salida (taxon) --> 
+ Numero de muestras --> 
+ Taxon a considerar (D:1 Ra:2 C:3 O:4 Fa:5 G:6 E:7 All:0) --> 
+ DATASET READ
+ --------------------------------
+ Number of OTUs:             1150
+ --------------------------------
+ Sum of the READS:        1176701
+ --------------------------------
+ SumD0:    714.00000000000000        734.00000000000000        699.0000000000
+0000        1150.0000000000000             1150
+ SumD1:   -3.9558681655915131       -3.5087157489804719       -3.336452988254
+4174       -4.5152713833346212             1150
+ SumD2:    4.3330792594217356E-002   9.3895954757171829E-002   9.565632624708
+2035E-002   3.1192241222292943E-002        1150
+ e^H(           1 ):    52.241028125880199     
+ e^H(           2 ):    33.405339383263254     
+ e^H(           3 ):    28.119210438377102     
+ e^H(           4 ):    91.402367736198670     
+ --------------------------------
+ Number of samples:             4
+ Number of OTUs:             1150
+ Number of READs:         1176701
+ ------- Fim do Programa --------
+
+--------- --------- --------- --------- --------- --------- --------- 
+--------- --------- --------- --------- --------- --------- --------- 
+El algoritmo para calcular los indices es lo siguiente:
+
+La funcion: D_beta = [ Sum(p_i^beta) ]^[ 1 / (1-beta) ]
+(la suma en las OTUs, de i = 1 hasta R, la Riqueza)
+genera los momentos importantes para los analices de diversidad:
+
+beta=0
+D_0 = [ Sum(p_i^0) ]^1   , i=1,R   --> nos da la Riqueza (R) misma
+
+beta=1
+D_1 es una indeterminacion, pero un analisis de limites (beta -> 1)
+lleva a la expresion:
+H = - Sum[p_i ln(p_i)]
+donde H es el "Indice (Entropia) de Shannon", y
+D_1 = e^H = S1 es la "Diversidad de Shannon-Wiener"
+Tambien:
+E_H = H / ln(R)   --> equitability (evenness) de Shannon
+
+beta=2
+D_2 = [ Sum(p_i^2) ]^(-1)   , i=1,R   --> nos da la reciproca 
+del "Indice de Simpson" (S2), es decir,
+D_2 = 1/S2
+y 
+1 - S2   --> Indice de Diversidad de Simpson
+
+* El significado de los indices es lo siguiente:
+- R (Riqueza): es la abundancia de clases (especies, generos, etc)
+             en la muestra
+- S1 (Diversidad de Shannon-Wiener): nos dice cuantas clases
+"dominan", en terminos de abundancia, la muestra. En otras palabras,
+la diversidad refleja tanto el numero de diferentes clases
+(especies, generos, etc) en una comunidad (muestra) como su relativa
+abundancia (regularidad). Si un solo genero, p. ej., domina la 
+muestra, la diversidad va tender a 1. Si, p. ej., 5 generos son 
+relativamente igualmente abundantes, la diversidad va tender a 5. 
+
+- E_H (Evenness): asume un valor entre 0 y 1, siendo 1 la completa
+                  regularidad.
+
+- S2 (Indice de Simpson): mide la probabilidad de que dos individuos,
+seleccionados al azar de una muestra, pertenezcan a la misma clase
+(o genero, especie, etc). En ese caso, un valor S2=0 representa una
+diversidad infinita, mientras S2=1 representa la ausencia de 
+diversidad (solo una clase).
+
+- [1 - S2] (Diversidad de Simpson): Tambien varia entre 0 y 1, pero
+ahora mayores valores representan mayor diversidad. Es mas razonable
+que S2, por eso es mas utilizado (es el calculado por el script).
+En ese caso, el indice representa la probabilidad de que dos 
+individuos, seleccionados al azar de una muestra, pertenezcan a
+clases (o generos, especias, etc) diferentes.
+
+--------- --------- --------- --------- --------- --------- --------- 
+Respecto a los indices de correccion de riqueza (r_pot, ACE de Chao,
+etc), estoy de acuerdo con Robert Edgar: no parecen adecuados para 
+datos de NGS porque utilizan, p. ej., los singletons (como en el 
+caso de ACE) que pueden venir de errores de PCR o de secuenciacion.
+--------- --------- --------- --------- --------- --------- --------- 
+

@@ -1,0 +1,400 @@
+REDUCCION DATOS SEQUENCING ----------------------------------------------------
+
+========= ========= ========= ========= ========= ========= ========= =========
+ETAPA 0
+========= ========= ========= ========= ========= ========= ========= =========
+>> Instalacao dos programas:
+
+---------- Compilador de Python -----------------------------------------------
+
+---------- FASTQC -------------------------------------------------------------
+
+---------- USEARCH ------------------------------------------------------------
+
+---------- QUIIME -------------------------------------------------------------
+
+---------- R Project ----------------------------------------------------------
+
+---------- PhyloSeq -----------------------------------------------------------
+
+
+========= ========= ========= ========= ========= ========= ========= =========
+ETAPA 1
+========= ========= ========= ========= ========= ========= ========= =========
+
+A) CHEQUEO DE LOS DATOS:
+
+[]$ ls *fastq		# 'ls' es el comando linux para listar
+                        # el contenido de una carpeta
+MGGL_TGCCTT_L001_R.extendedFrags.fastq  # Parangueo: Laguna Grande
+MGPL_GTTCGC_L001_R.extendedFrags.fastq  # Parangueo: Laguna Chica
+
+--------- --------- --------- --------- --------- --------- 
+[]$ wc *.fastq		# 'wc' cuenta las lineas, palabras y letras
+                        # de un archivo
+   82104   102630 19437309 MGGL_TGCCTT_L001_R.extendedFrags.fastq
+   58140    72675 13839918 MGPL_GTTCGC_L001_R.extendedFrags.fastq
+
+--------- --------- --------- --------- --------- --------- 
+[]$ cp MGGL_TGCCTT_L001_R.extendedFrags.fastq MGGL_TGCCTT_R.fastq
+[]$ cp MGPL_GTTCGC_L001_R.extendedFrags.fastq MGPL_GTTCGC_R.fastq
+			# 'cp' es el comando linux para hacer copia
+			# de un archivo en la carpeta actual o en
+			# otra
+			# estamos haciendo copia de los datos 
+			# originales para trabajar en las copias
+
+[]$ mv *extendedFrags.fastq ../01_ORIGINALES/
+			# 'mv' sirve para cambiar el nombre de 
+                        # un archivo o cambiarlo de carpeta
+
+
+[]$ grep -c '@HWI-M00185' *.fastq
+MGGL_TGCCTT_R.fastq:20526
+MGPL_GTTCGC_R.fastq:14535
+			# 'grep' busca un patron (lo que está entre
+			# comillas (' ' o " ") en uno o muchos archivos
+			# '*' significa varias letras que pueden ser
+			# diferentes; '?' significa una letra apenas
+
+>> Todos los comandos arriba no son realmente necesarios, solamente
+   sirven para checar si los archivos de datos están bien y 
+   caracterizarlos
+
+--------- --------- --------- --------- --------- --------- 
+>> El primer paso es realmente analizar la calidad de las secuencias
+   utilizando la tarea 'fastqc' (con ese paquete instalado, 
+   evidentemente), sobre los archivos en formato .fastq
+
+[]$ fastqc MGGL_TGCCTT_R.fastq
+...
+[]$ fastqc MGPL_GTTCGC_R.fastq
+...
+
+--------- --------- --------- --------- --------- --------- 
+>> Son generados archivos .html y .zip de cada analisis
+
+[]$ firefox MGGL_R_fastqc.html &
+Sanger/Illumina 1.9	MGGL_R		MGPL_R
+Seqs:			20526		14535
+Poor quality: 		0		0
+Seq. length:  		304-484		314-590
+%GC:          		54		54
+Qual/seq  Q>32          <450            <450
+          Q>28          All             <470
+          Q>20          All             <490
+
+[]$ mv *.html ../02_Quality/
+[]$ mv *.zip ../02_Quality/
+
+--------------------------------------------------------------------------------
+A') ASSEMBLING R1 AND R2 (paired-end sequences)
+
+>> Los datos de Parangueo ya están "assembled".
+   Si no estuvieran, seria necesario juntar "hacer contig" las
+   dos secuencias de cada organismo: R1 (forward) y R2 (reversed).
+
+[]$ usearch -fastq_mergepairs pab_S176_R1.fastq -reverse pab_S176_R2.fastq -fastqout pab_S176_R.fastq
+Merging
+  Fwd pab_S176_R1.fastq
+  Rev pab_S176_R2.fastq
+  Keep read labels
+00:00 81Mb    100.0% 66.4% merged
+Totals:
+     16713  Pairs (16.7k)
+     11093  Merged (11.1k, 66.37%)          <-- só 66% merged?
+      1533  Alignments with zero diffs (9.17%)
+      5516  Too many diffs (> 5) (33.00%)   <-- nao merged?
+       104  No alignment found (0.62%)      <-- no encontró alineamiento, OK.
+         0  Alignment too short (< 16) (0.00%)
+        19  Staggered pairs (0.11%) merged & trimmed
+    164.63  Mean alignment length           <-- segmento de interseccion
+    435.13  Mean merged length              <-- tamanho final
+      0.26  Mean fwd expected errors
+      2.83  Mean rev expected errors
+      0.09  Mean merged expected errors
+Checando o tamanho das seqs: (435+165):2=300 OK!
+
+
+[]$ grep -c '@M00414' *176*.fastq
+pab_S176_R1.fastq:16713
+pab_S176_R2.fastq:16713
+pab_S176_R.fastq:13254
+
+>> Igual que com os dados do Pabel, com a opcao "-fastq_maxdiffs 10" ficou
+   melhor, e nao melhora subindo para 15...
+   Recordando, para overlaps grandes, aumentando de 5 para 10 possiveis
+   erros aumentam as chances de obter match.
+
+>> Ja nessa etapa se perdem aprox. 20% das sequencias!!!
+
+--------------------------------------------------------------------------------
+B) BARCODE 
+>> Agora aplicando o script 'add_barcode.py' para adicionar um 'barcode'
+   ao inicio de cada sequencia, necessario para o usearch remover o 'primer'
+   e nao perder a informacao de que amostra estamos trabalhando.
+   (lembrar que o programa fonte python deve estar no diretorio, se nao
+   estiver instalado no sistema)
+
+[]$ ls *.py
+add_barcode.py  fasta.py  fastq_strip_barcode_relabel2.py  primer.py
+die.py          fastq.py  fastq_strip_barcode_relabel.py   progress.py
+
+::::::::::::::::::::
+>>> PRIMER (MG):     ACGGGAGGCAGCAGTGGGG
+
+[]$ python add_barcode.py MGGL_TGCCTT_R.fastq MGGL_R_add
+[]$ python add_barcode.py MGPL_GTTCGC_R.fastq MGPL_R_add
+
+[]$ ls *barcode*
+barcode_MGGL_R_add.fasta         MGGL_TGCCTT_R_barcoded.fastq
+barcode_MGPL_R_add.fasta         MGPL_GTTCGC_R_barcoded.fastq
+
+
+[]$ python fastq_strip_barcode_relabel2.py MGGL_TGCCTT_R_barcoded.fastq ACGGGAGGCAGCAG barcode_MGGL_R_add.fasta ParLG > MGGL_R_stripped.fastq
+     20526 seqs
+     19941 matched
+         0 barcode mismatches
+       585 primer mismatches
+
+[]$ python fastq_strip_barcode_relabel2.py MGPL_GTTCGC_R_barcoded.fastq ACGGGAGGCAGCAG barcode_MGPL_R_add.fasta ParLC > MGPL_R_stripped.fastq
+     14535 seqs
+     14186 matched
+         0 barcode mismatches
+       349 primer mismatches
+
+[]$ ls *strip*
+MGGL_R_stripped.fastq
+MGPL_R_stripped.fastq
+
+--------------------------------------------------------------------------------
+>> Contando novamente, agora que se retiraram as sequencias en que houve
+   mismatch do primer:
+
+[]$ grep -c 'ParLG' *stripped.fastq
+MGGL_R_stripped.fastq:19941
+MGPL_R_stripped.fastq:0
+[]$ grep -c 'ParLC' *stripped.fastq
+MGGL_R_stripped.fastq:0
+MGPL_R_stripped.fastq:14186
+
+--------------------------------------------------------------------------------
+>> Agora se pode juntar as sequencias das 2 amostras porque ja estao 
+   rotuladas
+[]$ cat *_stripped.fastq > mar0_AllReads.fastq
+[]$ grep -c 'Par' *AllReads.fastq
+34127
+
+[]$ mv *barcode* ../03_Barcode/
+...
+
+[]$ cp mar0_AllReads.fastq ../04_Usearch/
+[]$ cd 04_Usearch		# 'cd' = change directory, es decir
+				# sirve para cambiar a otra carpeta
+
+--------------------------------------------------------------------------------
+C) PODA DE LAS SEQUENCIAS
+ 
+>> O proximo passo eh a PODA/APARAMENTO das sequencias para retirar
+   as extremidades (opostas aos primers) porque normalmente eh onde
+   a qualidade dos READS eh menor (aparecem mais letras incorretas).
+   Tambem eh possivel FILTRAR por qualidade diretamente.
+   Nesta etapa (usando o usearch) ja se converte para formato 'fasta'
+
+[]$ usearch
+usearch v9.2.64_i86linux32, 4.0Gb RAM (4.0Gb total), 2 cores
+(C) Copyright 2013-16 Robert C. Edgar, all rights reserved.
+http://drive5.com/usearch
+License: ca.caretta@gmail.com
+
+[]$ usearch -fastq_filter mar0_AllReads.fastq -fastq_trunclen 418 -fastaout mar1_AllTrim420t.fasta
+    ------- ------------- ------------------- --------------- --- --------- -----------------
+    script  comando       arq_entrada         filtro          vlr opcao3    arq_saida
+
+>> Empece con 450 porque, como los datos son 'paired-end', ese es el
+   tamanho tipico ...
+
+00:00 13Mb    100.0% Filtering, 0.0% passed
+     34127  Reads (34.1k)                  
+     34125  Discarded reads length < 450
+         2  Filtered reads (2, 0.0%)
+
+00:01 13Mb    100.0% Filtering, 42.3% passed
+     34127  Reads (34.1k)                   
+     19701  Discarded reads length < 425
+     14426  Filtered reads (14.4k, 42.3%)
+
+00:01 13Mb    100.0% Filtering, 93.4% passed
+     34127  Reads (34.1k)                   
+      2246  Discarded reads length < 420
+     31881  Filtered reads (31.9k, 93.4%)
+Garantiza la calidad arriba de Q=32
+
+[]$ usearch -fastq_filter mar0_AllReads.fastq -fastq_trunclen 418 -fastaout mar1_AllTrim418t.fasta
+00:01 13Mb    100.0% Filtering, 100.0% passed	<--
+     34127  Reads (34.1k)                    
+         6  Discarded reads length < 418	<--
+     34121  Filtered reads (34.1k, 100.0%)	<--
+
+00:00 13Mb    100.0% Filtering, 100.0% passed
+     34127  Reads (34.1k)                    
+         0  Discarded reads length < 415
+     34127  Filtered reads (34.1k, 100.0%)
+
+>> La idea es llegar a un valor minimo de perdida de secuencias con un numero 
+   maximo de pares de base (bp), es decir con el mayor tamanho de secuencia
+   posible.
+
+--------------------------------------------------------------------------------
+D) DEREPLICACION
+
+>> Agora ja podemos juntar as sequencias que sao 100% iguais 
+   (carregando o numero de sequencias iguais) para ficar com 
+   menos sequencias e facilitar o processamento.
+
+[]$ usearch -fastx_uniques mar1_AllTrim418t.fasta -fastaout mar2_AllDeRep418t.fasta -sizeout -relabel Uniq
+00:00 56Mb    100.0% Reading mar1_AllTrim418t.fasta
+00:00 33Mb    100.0% DF                            
+00:00 34Mb   34121 seqs, 14233 uniques, 11336 singletons (79.6%)
+00:00 34Mb   Min size 1, median 1, max 3563, avg 2.40
+00:01 33Mb    100.0% Writing mar2_AllDeRep418t.fasta
+
+--------------------------------------------------------------------------------
+[]$ usearch -sortbysize mar2_AllDeRep418t.fasta -fastaout prueba2.fasta -minsize 2
+00:01 46Mb    100.0% Reading mar2_AllDeRep418t.fasta
+00:01 13Mb   Getting sizes                          
+00:01 13Mb   Sorting 2897 sequences
+00:01 13Mb    100.0% Writing output
+
+[]$ usearch -sortbysize mar2_AllDeRep418t.fasta -fastaout prueba5.fasta -minsize 5
+00:00 46Mb    100.0% Reading mar2_AllDeRep418t.fasta
+00:00 13Mb   Getting sizes                          
+00:00 13Mb   Sorting 551 sequences
+00:00 13Mb    100.0% Writing output
+
+--------------------------------------------------------------------------------
+E) CLUSTERING
+
+>> Nessa etapa se faz a busca por quimeras nas sequencias que nao sao 
+   singletons (The cluster_otus command performs 97% OTU clustering):
+
+[]$ usearch -cluster_otus mar2_AllDeRep418t.fasta -otus mar4_OTUs418t.fasta -relabel OTU_ -minsize 5
+00:01 48Mb    100.0% 132 OTUs, 20 chimeras
+
+[]$ grep -c 'OTU' *OTU*fasta
+mar4_OTUs418t.fasta:132
+
+--------------------------------------------------------------------------------
+F) MAPEAMENTO GLOBAL DE LOS READS (incluindo até os singletons).
+
+[]$ usearch -usearch_global mar1_AllTrim418t.fasta -db mar4_OTUs418t.fasta -strand plus -id 0.97 -uc map_mar.uc
+    ------- --------------- ---------------------- --- ------------------- ------- ---- --- ---- --- ----------
+    script  op1             arq_entrada            op2 vlr:database        op3     vlr  op4 vlr  op5 vlr
+
+00:00 40Mb    100.0% Reading mar4_OTUs418t.fasta
+00:00 6.5Mb   100.0% Masking (fastnucleo)       
+00:00 7.5Mb   100.0% Word stats          
+00:00 7.5Mb   100.0% Alloc rows
+00:00 7.7Mb   100.0% Build index
+00:02 53Mb    100.0% Searching, 90.1% matched
+
+--------------------------------------------------------------------------------
+> Recordar que la taxonomia (estadistica) depende:
+   - do arquivo de referencia (base de datos), que deve estar sempre o mais 
+     atualizado possivel
+   - do tamanho e da qualidade das sequencias
+   - otros factores
+   A forma de verificar individualmente a taxonomia eh com o NCBI:
+     https://blast.ncbi.nlm.nlh.gov
+
+--------------------------------------------------------------------------------
+G) TAXONOMIA
+
+::::::::::::::::::::
+1) Criando o UDB database file [debe ser generado en la maquina que se está trabajando]
+[]$ usearch -makeudb_sintax rdp_16s_v16_sp.fa -output rdp_16s.udb
+00:00 61Mb    100.0% Reading rdp_16s_v16_sp.fa
+00:00 28Mb    100.0% Converting to upper case 
+00:01 29Mb    100.0% Word stats              
+00:01 29Mb    100.0% Alloc rows
+00:03 103Mb   100.0% Build index
+00:03 105Mb   100.0% Initialize taxonomy data
+00:03 105Mb   100.0% Building name table     
+00:03 105Mb  14470 names, tax levels min 3, avg 6.7, max 7
+WARNING: 2 taxonomy nodes have >1 parent
+00:03 105Mb  Buffers (13212 seqs)
+00:03 122Mb   100.0% Seqs
+
+[]$ usearch -makeudb_sintax ltp_16s_v123.fa -output silva_16s.udb
+00:00 59Mb    100.0% Reading ltp_16s_v123.fa
+00:01 25Mb    100.0% Converting to upper case
+00:01 26Mb    100.0% Word stats              
+00:01 26Mb    100.0% Alloc rows
+00:03 94Mb    100.0% Build index
+00:03 95Mb    100.0% Initialize taxonomy data
+00:03 96Mb    100.0% Building name table     
+00:03 96Mb   14669 names, tax levels min 3, avg 3.0, max 3
+WARNING: 1 taxonomy nodes have >1 parent
+00:03 96Mb   Buffers (11939 seqs)
+00:03 113Mb   100.0% Seqs
+
+::::::::::::::::::::
+>> Agora o primeiro passo da Taxonomia:
+
+[]$ usearch -sintax mar4_OTUs418t.fasta -db rdp_16s.udb -tabbedout mar5_TAX_table418t.txt -strand both -sintax_cutoff 0.8
+00:02 79Mb    100.0% Rows
+00:02 79Mb   Read taxonomy info...done.
+00:02 80Mb   Reading pointers...done.
+00:02 82Mb   Reading db seqs...done.
+00:04 145Mb   100.0% Processing
+
+--------------------------------------------------------------------------------
+H) TABLAS DE OTUS
+
+>> Segundo passo da Taxonomia:
+
+[]$ python -V
+Python 2.7.13 :: Continuum Analytics, Inc.
+
+[]$ ls *.py
+die.py  fasta.py  progress.py  uc2otutab.py  uc.py
+
+[]$ python2.7 uc2otutab.py map_mar.uc > mar6_OTU_table418t.txt
+map_mar.uc 100.0%   
+
+[]$ wc *TAX*
+  132   528 35169 mar5_TAX_table418t.txt
+[]$ wc *OTU*
+  924   924 57048 mar4_OTUs418t.fasta
+  133   399  1696 mar6_OTU_table418t.txt
+
+
+[]$ cp mar4_OTUs418t.fasta ../05_QUIIME/
+[]$ cp mar5_TAX_table418t.txt ../06_Phyloseq/
+[]$ cp mar6_OTU_table418t.txt ../06_Phyloseq/
+[]$ cp mar5_TAX_table418t.txt ../07_Indices/
+[]$ cp mar6_OTU_table418t.txt ../07_Indices/
+
+::::::::::::::::::::
+>> NOTAR QUE:
+[caretta@Fenix 03_USEARCH]$ more vic5_TAXtab_270t2.txt
+OTU_1	d:Bacteria(1.0000),p:Cyanobacteria/Chloroplast(1.0000),c:Cyanobacteria(1.0000),f:Family_I(1.0000),g:GpI(1.0000)	+	d:Bacteria,p:Cyanobacteria/C
+hloroplast,c:Cyanobacteria,f:Family_I,g:GpI
+OTU_2	d:Bacteria(1.0000),p:"Actinobacteria"(1.0000),c:Actinobacteria(1.0000),o:Actinomycetales(1.0000),f:Microbacteriaceae(1.0000),g:Microbacterium(1.0000
+),s:Microbacterium_liquefaciens(0.4200)	+	d:Bacteria,p:"Actinobacteria",c:Actinobacteria,o:Actinomycetales,f:Microbacteriaceae,g:Microbacterium
+OTU_3	d:Bacteria(1.0000),p:"Chloroflexi"(0.9500),c:Chloroflexia(0.9400),o:"Chloroflexales"(0.9300),f:Chloroflexaceae(0.9200),g:Roseiflexus(0.9100),s:Rosei
+flexus_castenholzii(0.9100)	+	d:Bacteria,p:"Chloroflexi",c:Chloroflexia,o:"Chloroflexales",f:Chloroflexaceae,g:Roseiflexus,s:Roseiflexus_castenhol
+zii
+
+[caretta@Fenix 04_Rtables]$ more vic6_OTUtab_270t2.txt
+OTUId	vic_spi_R1_add	vic_tex_R1_add	vic_tin_R1_add
+OTU_5	41542	2	177
+OTU_6	40226	4	141
+OTU_37	6509	0	27
+OTU_395	169	0	1
+
+>> ES DECIR, em TAX as OTUs estao ordenadas, mas em OTU a ordem eh diferente
+(por abundancia). Logo, tem que ter cuidado na hora de extrair e combinar
+colunas no R...
+::::::::::::::::::::
+
